@@ -113,19 +113,20 @@ public class SecurityConfig {
                                 "/actuator/**")
                         .hasRole("ADMINISTRADOR")
 
-                        /*
-                         * Todas las funciones administrativas requieren
-                         * el rol ADMINISTRADOR.
-                         */
                         .requestMatchers(
                                 "/api/v1/admin/**")
                         .hasRole("ADMINISTRADOR")
+
+                        .requestMatchers(
+                                "/api/v1/loans/**")
+                        .hasAnyRole(
+                                "ADMINISTRADOR",
+                                "USUARIO")
 
                         .anyRequest()
                         .hasAnyRole(
                                 "ADMINISTRADOR",
                                 "USUARIO"))
-
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(
                         jwtConverter)));
 
