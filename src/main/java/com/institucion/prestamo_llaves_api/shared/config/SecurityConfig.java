@@ -1,6 +1,5 @@
 package com.institucion.prestamo_llaves_api.shared.config;
 
-
 import java.util.List;
 
 import org.springframework.context.annotation.Bean;
@@ -29,35 +28,27 @@ public class SecurityConfig {
     @Bean
     AuthenticationProvider authenticationProvider(
             UserDetailsService userDetailsService,
-            PasswordEncoder passwordEncoder
-    ) {
-        DaoAuthenticationProvider provider =
-            new DaoAuthenticationProvider(
-                userDetailsService
-            );
+            PasswordEncoder passwordEncoder) {
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider(
+                userDetailsService);
 
         provider.setPasswordEncoder(
-            passwordEncoder
-        );
+                passwordEncoder);
 
         return provider;
     }
 
     @Bean
     AuthenticationManager authenticationManager(
-            AuthenticationProvider authenticationProvider
-    ) {
+            AuthenticationProvider authenticationProvider) {
         return new ProviderManager(
-            List.of(authenticationProvider)
-        );
+                List.of(authenticationProvider));
     }
 
     @Bean
-    JwtAuthenticationConverter
-            jwtAuthenticationConverter() {
+    JwtAuthenticationConverter jwtAuthenticationConverter() {
 
-        JwtGrantedAuthoritiesConverter authoritiesConverter =
-            new JwtGrantedAuthoritiesConverter();
+        JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
 
         /*
          * Lee la lista personalizada:
@@ -65,20 +56,16 @@ public class SecurityConfig {
          * "authorities": ["ADMINISTRADOR"]
          */
         authoritiesConverter.setAuthoritiesClaimName(
-            "authorities"
-        );
+                "authorities");
 
         authoritiesConverter.setAuthorityPrefix(
-            "ROLE_"
-        );
+                "ROLE_");
 
-        JwtAuthenticationConverter authenticationConverter =
-            new JwtAuthenticationConverter();
+        JwtAuthenticationConverter authenticationConverter = new JwtAuthenticationConverter();
 
         authenticationConverter
-            .setJwtGrantedAuthoritiesConverter(
-                authoritiesConverter
-            );
+                .setJwtGrantedAuthoritiesConverter(
+                        authoritiesConverter);
 
         return authenticationConverter;
     }
@@ -87,79 +74,60 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             AuthenticationProvider authenticationProvider,
-            JwtAuthenticationConverter jwtConverter
-    ) throws Exception {
+            JwtAuthenticationConverter jwtConverter) throws Exception {
 
         http
-            .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf.disable())
 
-            .httpBasic(httpBasic ->
-                httpBasic.disable()
-            )
+                .httpBasic(httpBasic -> httpBasic.disable())
 
-            .formLogin(formLogin ->
-                formLogin.disable()
-            )
+                .formLogin(formLogin -> formLogin.disable())
 
-            .logout(logout ->
-                logout.disable()
-            )
+                .logout(logout -> logout.disable())
 
-            .requestCache(requestCache ->
-                requestCache.disable()
-            )
+                .requestCache(requestCache -> requestCache.disable())
 
-            .sessionManagement(session ->
-                session.sessionCreationPolicy(
-                    SessionCreationPolicy.STATELESS
-                )
-            )
+                .sessionManagement(session -> session.sessionCreationPolicy(
+                        SessionCreationPolicy.STATELESS))
 
-            .authenticationProvider(
-                authenticationProvider
-            )
+                .authenticationProvider(
+                        authenticationProvider)
 
-            .authorizeHttpRequests(authorize -> authorize
-                .requestMatchers(
-                    HttpMethod.POST,
-                    "/api/v1/auth/login"
-                ).permitAll()
+                .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/auth/login")
+                        .permitAll()
 
-                /*
-                 * Se implementará en la siguiente parte.
-                 */
-                .requestMatchers(
-                    HttpMethod.POST,
-                    "/api/v1/auth/change-password"
-                ).authenticated()
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/auth/change-password")
+                        .authenticated()
 
-                .requestMatchers(
-                    "/actuator/health",
-                    "/actuator/health/**"
-                ).permitAll()
+                        .requestMatchers(
+                                "/actuator/health",
+                                "/actuator/health/**")
+                        .permitAll()
 
-                .requestMatchers(
-                    "/actuator/**"
-                ).hasRole("ADMINISTRADOR")
+                        .requestMatchers(
+                                "/actuator/**")
+                        .hasRole("ADMINISTRADOR")
 
-                /*
-                 * Los usuarios que aún deben cambiar su
-                 * contraseña no poseen estos roles efectivos.
-                 */
-                .anyRequest()
-                    .hasAnyRole(
-                        "ADMINISTRADOR",
-                        "USUARIO"
-                    )
-            )
+                        /*
+                         * Todas las funciones administrativas requieren
+                         * el rol ADMINISTRADOR.
+                         */
+                        .requestMatchers(
+                                "/api/v1/admin/**")
+                        .hasRole("ADMINISTRADOR")
 
-            .oauth2ResourceServer(oauth2 ->
-                oauth2.jwt(jwt ->
-                    jwt.jwtAuthenticationConverter(
-                        jwtConverter
-                    )
-                )
-            );
+                        .anyRequest()
+                        .hasAnyRole(
+                                "ADMINISTRADOR",
+                                "USUARIO"))
+
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(
+                        jwtConverter)));
 
         return http.build();
     }

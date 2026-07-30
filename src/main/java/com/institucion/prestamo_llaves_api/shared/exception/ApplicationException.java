@@ -1,6 +1,7 @@
 
 package com.institucion.prestamo_llaves_api.shared.exception;
 
+
 /**
  * Excepción base para errores controlados de la aplicación.
  *

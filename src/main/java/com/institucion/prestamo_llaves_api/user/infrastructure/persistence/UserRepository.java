@@ -8,6 +8,12 @@ import com.institucion.prestamo_llaves_api.user.domain.model.User;
 
 import com.institucion.prestamo_llaves_api.user.domain.model.UserRole;
 
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import jakarta.persistence.LockModeType;
+
 /**
  * Acceso a los usuarios registrados en la aplicación.
  */
@@ -36,4 +42,19 @@ public interface UserRepository
      * mediante el proceso de inicialización.
      */
     boolean existsByRole(UserRole role);
+
+    /**
+     * Obtiene un usuario aplicando un bloqueo de escritura.
+     *
+     * Evita que dos solicitudes cambien simultáneamente
+     * la contraseña o el estado de la misma cuenta.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT user
+            FROM User user
+            WHERE user.id = :userId
+            """)
+    Optional<User> findByIdForUpdate(
+            @Param("userId") Long userId);
 }
