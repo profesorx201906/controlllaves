@@ -1,13 +1,11 @@
 package com.institucion.prestamo_llaves_api.user.application;
 
-
 import java.time.Instant;
 
 import com.institucion.prestamo_llaves_api.user.domain.model.UserRole;
 
 /**
- * Resultado inmutable de la creación administrativa
- * de una cuenta.
+ * Resultado de la creación administrativa de una cuenta.
  */
 public record UserCreatedResult(
     Long id,
@@ -16,6 +14,7 @@ public record UserCreatedResult(
     UserRole role,
     boolean enabled,
     boolean mustChangePassword,
-    Instant createdAt
+    Instant createdAt,
+    Instant updatedAt
 ) {
 }

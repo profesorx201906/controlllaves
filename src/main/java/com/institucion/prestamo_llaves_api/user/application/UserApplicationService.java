@@ -1,6 +1,11 @@
 package com.institucion.prestamo_llaves_api.user.application;
 
+import java.util.List;
 import java.util.Locale;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -11,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.institucion.prestamo_llaves_api.auth.application.PasswordPolicy;
 import com.institucion.prestamo_llaves_api.shared.exception.BusinessRuleException;
 import com.institucion.prestamo_llaves_api.shared.exception.InvalidRequestException;
+import com.institucion.prestamo_llaves_api.shared.exception.ResourceNotFoundException;
 import com.institucion.prestamo_llaves_api.user.domain.model.User;
 import com.institucion.prestamo_llaves_api.user.domain.model.UserRole;
 import com.institucion.prestamo_llaves_api.user.infrastructure.persistence.UserRepository;
@@ -23,6 +29,7 @@ public class UserApplicationService {
 
     private static final int MAX_NAME_LENGTH = 120;
     private static final int MAX_EMAIL_LENGTH = 180;
+    private static final int MAX_SEARCH_LENGTH = 100;
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -94,7 +101,8 @@ public class UserApplicationService {
                     savedUser.getRole(),
                     savedUser.isEnabled(),
                     savedUser.isMustChangePassword(),
-                    savedUser.getCreatedAt());
+                    savedUser.getCreatedAt(),
+                    savedUser.getUpdatedAt());
 
         } catch (DataIntegrityViolationException exception) {
             /*
@@ -161,5 +169,167 @@ public class UserApplicationService {
         }
 
         return role;
+    }
+
+    /**
+     * Consulta usuarios usando paginación y filtros opcionales.
+     */
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    @Transactional(readOnly = true)
+    public Page<UserSummaryResult> searchUsers(
+            String search,
+            UserRole role,
+            Boolean enabled,
+            Pageable pageable) {
+        if (pageable == null || pageable.isUnpaged()) {
+            throw new InvalidRequestException(
+                    "PAGINATION_REQUIRED",
+                    "La consulta debe indicar una paginación válida");
+        }
+
+        String normalizedSearch = normalizeSearch(search);
+
+        return userRepository
+                .searchUsers(
+                        normalizedSearch,
+                        role,
+                        enabled,
+                        pageable)
+                .map(UserSummaryResult::from);
+    }
+
+    /**
+     * Activa o desactiva una cuenta.
+     *
+     * actorUserId corresponde al administrador autenticado.
+     */
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    @Transactional
+    public UserStatusChangedResult changeUserStatus(
+            Long targetUserId,
+            Long actorUserId,
+            boolean enabled) {
+        validateIdentifier(
+                targetUserId,
+                "targetUserId");
+
+        validateIdentifier(
+                actorUserId,
+                "actorUserId");
+
+        /*
+         * Todas las modificaciones de estado bloquean primero
+         * los administradores activos en el mismo orden.
+         *
+         * Esto evita carreras entre dos desactivaciones.
+         */
+        List<User> activeAdministrators = userRepository.findAllEnabledByRoleForUpdate(
+                UserRole.ADMINISTRADOR);
+
+        /*
+         * Además de validar el rol del JWT, comprobamos que
+         * la cuenta administrativa continúe activa en MariaDB.
+         *
+         * Esto reduce el riesgo de que un token antiguo perteneciente
+         * a una cuenta desactivada cambie otros usuarios.
+         */
+        boolean actorIsActiveAdministrator = activeAdministrators
+                .stream()
+                .anyMatch(user -> user.getId().equals(actorUserId));
+
+        if (!actorIsActiveAdministrator) {
+            throw new AccessDeniedException(
+                    "La cuenta administrativa ya no está activa");
+        }
+
+        User targetUser = userRepository
+                .findByIdForUpdate(targetUserId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuario",
+                        targetUserId));
+
+        if (enabled) {
+            activateUser(targetUser);
+        } else {
+            deactivateUser(
+                    targetUser,
+                    activeAdministrators);
+        }
+
+        /*
+         * Ejecuta el UPDATE dentro del método y permite que
+         * updatedAt sea actualizado por la auditoría JPA.
+         */
+        userRepository.flush();
+
+        return UserStatusChangedResult.from(
+                targetUser);
+    }
+
+    private static void activateUser(User user) {
+        if (user.isEnabled()) {
+            throw new BusinessRuleException(
+                    "USER_ALREADY_ENABLED",
+                    "El usuario ya se encuentra habilitado");
+        }
+
+        user.activate();
+    }
+
+    private static void deactivateUser(
+            User user,
+            List<User> activeAdministrators) {
+        if (!user.isEnabled()) {
+            throw new BusinessRuleException(
+                    "USER_ALREADY_DISABLED",
+                    "El usuario ya se encuentra deshabilitado");
+        }
+
+        /*
+         * Nunca debe desactivarse el último administrador activo.
+         */
+        if (user.getRole() == UserRole.ADMINISTRADOR
+                && activeAdministrators.size() <= 1) {
+
+            throw new BusinessRuleException(
+                    "LAST_ACTIVE_ADMIN",
+                    "No se puede desactivar el último "
+                            + "administrador activo");
+        }
+
+        user.deactivate();
+    }
+
+    private static String normalizeSearch(
+            String search) {
+        if (search == null || search.isBlank()) {
+            return null;
+        }
+
+        String normalizedSearch = search
+                .trim()
+                .toLowerCase(Locale.ROOT);
+
+        if (normalizedSearch.length() > MAX_SEARCH_LENGTH) {
+
+            throw new InvalidRequestException(
+                    "SEARCH_TOO_LONG",
+                    "El texto de búsqueda no puede superar "
+                            + MAX_SEARCH_LENGTH
+                            + " caracteres");
+        }
+
+        return normalizedSearch;
+    }
+
+    private static void validateIdentifier(
+            Long identifier,
+            String fieldName) {
+        if (identifier == null || identifier <= 0) {
+            throw new InvalidRequestException(
+                    "INVALID_IDENTIFIER",
+                    fieldName
+                            + " debe ser un identificador positivo");
+        }
     }
 }
