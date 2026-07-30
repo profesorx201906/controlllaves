@@ -1,6 +1,5 @@
 package com.institucion.prestamo_llaves_api.key.infrastructure.persistence;
 
-
 import java.util.List;
 import java.util.Optional;
 
@@ -13,6 +12,10 @@ import com.institucion.prestamo_llaves_api.key.domain.model.KeyStatus;
 import com.institucion.prestamo_llaves_api.key.domain.model.RoomKey;
 
 import jakarta.persistence.LockModeType;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 
 /**
  * Acceso a las llaves de los ambientes.
@@ -37,10 +40,8 @@ public interface RoomKeyRepository
      * Lista las llaves por estado, pero únicamente cuando
      * el ambiente asociado continúa activo.
      */
-    List<RoomKey>
-        findAllByStatusAndRoom_ActiveTrueOrderByRoom_NameAsc(
-            KeyStatus status
-        );
+    List<RoomKey> findAllByStatusAndRoom_ActiveTrueOrderByRoom_NameAsc(
+            KeyStatus status);
 
     /**
      * Recupera una llave aplicando un bloqueo de escritura
@@ -50,11 +51,73 @@ public interface RoomKeyRepository
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
-        SELECT roomKey
-        FROM RoomKey roomKey
-        WHERE roomKey.id = :keyId
-        """)
+            SELECT roomKey
+            FROM RoomKey roomKey
+            WHERE roomKey.id = :keyId
+            """)
     Optional<RoomKey> findByIdForUpdate(
-        @Param("keyId") Long keyId
-    );
+            @Param("keyId") Long keyId);
+
+    /**
+     * Consulta el catálogo de ambientes activos y sus llaves.
+     *
+     * Los filtros de búsqueda y estado son opcionales.
+     * EntityGraph carga el ambiente junto con la llave y evita
+     * consultas adicionales al construir la respuesta.
+     */
+    @EntityGraph(attributePaths = "room")
+    @Query(value = """
+            SELECT roomKey
+            FROM RoomKey roomKey
+            WHERE roomKey.room.active = true
+              AND (
+                    :status IS NULL
+                    OR roomKey.status = :status
+                  )
+              AND (
+                    :search IS NULL
+                    OR LOCATE(
+                        :search,
+                        LOWER(roomKey.room.name)
+                    ) > 0
+                    OR LOCATE(
+                        :search,
+                        LOWER(
+                            COALESCE(
+                                roomKey.room.description,
+                                ''
+                            )
+                        )
+                    ) > 0
+                  )
+            """, countQuery = """
+            SELECT COUNT(roomKey)
+            FROM RoomKey roomKey
+            WHERE roomKey.room.active = true
+              AND (
+                    :status IS NULL
+                    OR roomKey.status = :status
+                  )
+              AND (
+                    :search IS NULL
+                    OR LOCATE(
+                        :search,
+                        LOWER(roomKey.room.name)
+                    ) > 0
+                    OR LOCATE(
+                        :search,
+                        LOWER(
+                            COALESCE(
+                                roomKey.room.description,
+                                ''
+                            )
+                        )
+                    ) > 0
+                  )
+            """)
+    Page<RoomKey> searchActiveRoomKeys(
+            @Param("search") String search,
+            @Param("status") KeyStatus status,
+            Pageable pageable);
+
 }

@@ -18,6 +18,8 @@ import com.institucion.prestamo_llaves_api.shared.exception.InvalidRequestExcept
 import com.institucion.prestamo_llaves_api.shared.exception.ResourceNotFoundException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+
 /**
  * Convierte excepciones controladas en respuestas HTTP.
  */
@@ -142,6 +144,20 @@ public class ApiExceptionHandler {
                                 HttpStatus.BAD_REQUEST,
                                 "VALIDATION_ERROR",
                                 message,
+                                request.getRequestURI());
+        }
+
+        @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+        public ResponseEntity<ApiError> handleTypeMismatch(
+                        MethodArgumentTypeMismatchException exception,
+                        HttpServletRequest request) {
+
+                return buildResponse(
+                                HttpStatus.BAD_REQUEST,
+                                "INVALID_PARAMETER",
+                                "El parámetro "
+                                                + exception.getName()
+                                                + " contiene un valor inválido",
                                 request.getRequestURI());
         }
 }
