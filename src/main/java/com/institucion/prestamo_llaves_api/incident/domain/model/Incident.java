@@ -74,6 +74,8 @@ public class Incident {
     @Column(name = "last_notification_error", length = 500)
     private String lastNotificationError;
 
+    private static final byte OPEN_SLOT_VALUE = 1;
+
     /**
      * Constructor requerido por JPA.
      */
@@ -108,6 +110,8 @@ public class Incident {
         this.reportedAt = Objects.requireNonNull(
                 reportedAt,
                 "reportedAt es obligatorio");
+
+        this.openSlot = OPEN_SLOT_VALUE;
 
         if (!loan.isActive()) {
             throw new IllegalStateException(
@@ -180,14 +184,16 @@ public class Incident {
     }
 
     /**
-     * Resuelve la incidencia.
+     * Resuelve administrativamente la incidencia.
      *
-     * El usuario recibido debe ser validado como administrador
-     * en la capa de aplicación o seguridad.
+     * La liberación de la llave y el cierre del préstamo
+     * serán coordinados por el servicio de aplicación.
      */
     public void resolve(
             User administrator,
-            Instant resolutionDate) {
+            Instant resolutionDate,
+            IncidentResolutionAction resolutionAction,
+            String resolutionNote) {
         Objects.requireNonNull(
                 administrator,
                 "administrator es obligatorio");
@@ -196,15 +202,30 @@ public class Incident {
                 resolutionDate,
                 "resolutionDate es obligatorio");
 
+        Objects.requireNonNull(
+                resolutionAction,
+                "resolutionAction es obligatorio");
+
         if (administrator.getRole() != UserRole.ADMINISTRADOR) {
+
             throw new IllegalArgumentException(
                     "La incidencia solo puede ser resuelta "
                             + "por un administrador");
         }
 
-        if (isResolved()) {
+        if (!administrator.isEnabled()) {
+            throw new IllegalArgumentException(
+                    "El administrador se encuentra deshabilitado");
+        }
+
+        if (!isOpen()) {
             throw new IllegalStateException(
                     "La incidencia ya está resuelta");
+        }
+
+        if (!loan.isActive()) {
+            throw new IllegalStateException(
+                    "El préstamo relacionado ya no está activo");
         }
 
         if (resolutionDate.isBefore(reportedAt)) {
@@ -212,17 +233,35 @@ public class Incident {
                     "La resolución no puede ser anterior al reporte");
         }
 
+        String normalizedNote = requireText(
+                resolutionNote,
+                "resolutionNote");
+
+        if (normalizedNote.length() > 500) {
+            throw new IllegalArgumentException(
+                    "La observación de resolución no puede superar "
+                            + "500 caracteres");
+        }
+
         this.resolvedByUser = administrator;
         this.resolvedAt = resolutionDate;
+        this.resolutionAction = resolutionAction;
+        this.resolutionNote = normalizedNote;
+        this.openSlot = null;
     }
 
     public boolean isResolved() {
         return resolvedAt != null
-                && resolvedByUser != null;
+                && resolvedByUser != null
+                && resolutionAction != null
+                && openSlot == null;
     }
 
     public boolean isOpen() {
-        return !isResolved();
+        return resolvedAt == null
+                && resolvedByUser == null
+                && openSlot != null
+                && openSlot == OPEN_SLOT_VALUE;
     }
 
     private static String requireText(
@@ -282,5 +321,31 @@ public class Incident {
 
     public String getLastNotificationError() {
         return lastNotificationError;
+    }
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "resolution_action", length = 30)
+    private IncidentResolutionAction resolutionAction;
+
+    @Column(name = "resolution_note", length = 500)
+    private String resolutionNote;
+
+    /**
+     * 1 indica que la incidencia sigue abierta.
+     * NULL indica que ya fue resuelta.
+     */
+    @Column(name = "open_slot")
+    private Byte openSlot;
+
+    public IncidentResolutionAction getResolutionAction() {
+        return resolutionAction;
+    }
+
+    public String getResolutionNote() {
+        return resolutionNote;
+    }
+
+    public Byte getOpenSlot() {
+        return openSlot;
     }
 }

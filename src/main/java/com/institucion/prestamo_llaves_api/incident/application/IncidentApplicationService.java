@@ -111,6 +111,19 @@ public class IncidentApplicationService {
         }
 
         /*
+         * Validación anticipada para producir una respuesta
+         * funcional comprensible.
+         */
+        if (incidentRepository
+                .existsByLoan_IdAndResolvedAtIsNull(
+                        activeLoan.getId())) {
+
+            throw new BusinessRuleException(
+                    "OPEN_INCIDENT_ALREADY_EXISTS",
+                    "El préstamo ya tiene una incidencia abierta");
+        }
+
+        /*
          * El userId será obtenido posteriormente desde el JWT.
          */
         if (!activeLoan.belongsToUser(userId)) {
