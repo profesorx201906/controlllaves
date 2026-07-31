@@ -17,7 +17,7 @@ import com.institucion.prestamo_llaves_api.shared.exception.BusinessRuleExceptio
 import com.institucion.prestamo_llaves_api.shared.exception.InvalidRequestException;
 import com.institucion.prestamo_llaves_api.shared.exception.ResourceNotFoundException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
-
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
@@ -158,6 +158,17 @@ public class ApiExceptionHandler {
                                 "El parámetro "
                                                 + exception.getName()
                                                 + " contiene un valor inválido",
+                                request.getRequestURI());
+        }
+
+        @ExceptionHandler(AccessDeniedException.class)
+        public ResponseEntity<ApiError> handleAccessDenied(
+                        AccessDeniedException exception,
+                        HttpServletRequest request) {
+                return buildResponse(
+                                HttpStatus.FORBIDDEN,
+                                "ACCESS_DENIED",
+                                "No tiene permisos para realizar esta operación",
                                 request.getRequestURI());
         }
 }

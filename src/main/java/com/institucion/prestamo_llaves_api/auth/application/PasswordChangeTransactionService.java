@@ -1,6 +1,5 @@
 package com.institucion.prestamo_llaves_api.auth.application;
 
-
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,8 +25,7 @@ public class PasswordChangeTransactionService {
     public PasswordChangeTransactionService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
-            PasswordPolicy passwordPolicy
-    ) {
+            PasswordPolicy passwordPolicy) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.passwordPolicy = passwordPolicy;
@@ -41,46 +39,37 @@ public class PasswordChangeTransactionService {
     public AuthenticatedUser changePassword(
             Long userId,
             String currentPassword,
-            String newPassword
-    ) {
+            String newPassword) {
         validateIdentifier(userId);
 
         if (currentPassword == null
                 || currentPassword.isBlank()) {
 
             throw new InvalidRequestException(
-                "CURRENT_PASSWORD_REQUIRED",
-                "La contraseña actual es obligatoria"
-            );
+                    "CURRENT_PASSWORD_REQUIRED",
+                    "La contraseña actual es obligatoria");
         }
 
         User user = userRepository
-            .findByIdForUpdate(userId)
-            .orElseThrow(() ->
-                new ResourceNotFoundException(
-                    "Usuario",
-                    userId
-                )
-            );
+                .findByIdForUpdate(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuario",
+                        userId));
 
         if (!user.isEnabled()) {
             throw new BusinessRuleException(
-                "USER_DISABLED",
-                "El usuario se encuentra deshabilitado"
-            );
+                    "USER_DISABLED",
+                    "El usuario se encuentra deshabilitado");
         }
 
-        boolean currentPasswordMatches =
-            passwordEncoder.matches(
+        boolean currentPasswordMatches = passwordEncoder.matches(
                 currentPassword,
-                user.getPasswordHash()
-            );
+                user.getPasswordHash());
 
         if (!currentPasswordMatches) {
             throw new InvalidRequestException(
-                "CURRENT_PASSWORD_INVALID",
-                "La contraseña actual es incorrecta"
-            );
+                    "CURRENT_PASSWORD_INVALID",
+                    "La contraseña actual es incorrecta");
         }
 
         passwordPolicy.validate(newPassword);
@@ -88,31 +77,32 @@ public class PasswordChangeTransactionService {
         /*
          * No se permite reutilizar la contraseña actual.
          */
-        boolean sameAsCurrentPassword =
-            passwordEncoder.matches(
+        boolean sameAsCurrentPassword = passwordEncoder.matches(
                 newPassword,
-                user.getPasswordHash()
-            );
+                user.getPasswordHash());
 
         if (sameAsCurrentPassword) {
             throw new InvalidRequestException(
-                "NEW_PASSWORD_MUST_DIFFER",
-                "La nueva contraseña debe ser diferente "
-                    + "de la contraseña actual"
-            );
+                    "NEW_PASSWORD_MUST_DIFFER",
+                    "La nueva contraseña debe ser diferente "
+                            + "de la contraseña actual");
         }
 
-        String newPasswordHash =
-            passwordEncoder.encode(newPassword);
+        String newPasswordHash = passwordEncoder.encode(newPassword);
 
         /*
          * false indica que ya no será obligatorio volver
          * a cambiarla en el siguiente inicio de sesión.
          */
         user.changePasswordHash(
-            newPasswordHash,
-            false
-        );
+                newPasswordHash,
+                false);
+
+        /*
+         * Invalida inmediatamente todos los JWT emitidos
+         * antes del cambio de contraseña.
+         */
+        user.incrementTokenVersion();
 
         /*
          * Fuerza la ejecución del UPDATE dentro
@@ -126,9 +116,8 @@ public class PasswordChangeTransactionService {
     private static void validateIdentifier(Long userId) {
         if (userId == null || userId <= 0) {
             throw new InvalidRequestException(
-                "INVALID_USER_IDENTIFIER",
-                "El identificador del usuario no es válido"
-            );
+                    "INVALID_USER_IDENTIFIER",
+                    "El identificador del usuario no es válido");
         }
     }
 }

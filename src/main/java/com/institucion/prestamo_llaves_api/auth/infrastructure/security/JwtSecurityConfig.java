@@ -1,6 +1,5 @@
 package com.institucion.prestamo_llaves_api.auth.infrastructure.security;
 
-
 import java.util.Base64;
 
 import javax.crypto.SecretKey;
@@ -15,6 +14,10 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 /**
  * Configura la firma y validación de JWT con HS256.
@@ -31,55 +34,52 @@ public class JwtSecurityConfig {
 
         try {
             keyBytes = Base64.getDecoder()
-                .decode(properties.secretBase64());
+                    .decode(properties.secretBase64());
 
         } catch (IllegalArgumentException exception) {
             throw new IllegalStateException(
-                "JWT_SECRET_BASE64 no contiene un valor Base64 válido",
-                exception
-            );
+                    "JWT_SECRET_BASE64 no contiene un valor Base64 válido",
+                    exception);
         }
 
         if (keyBytes.length < MINIMUM_SECRET_BYTES) {
             throw new IllegalStateException(
-                "JWT_SECRET_BASE64 debe representar al menos "
-                    + MINIMUM_SECRET_BYTES
-                    + " bytes"
-            );
+                    "JWT_SECRET_BASE64 debe representar al menos "
+                            + MINIMUM_SECRET_BYTES
+                            + " bytes");
         }
 
         return new SecretKeySpec(
-            keyBytes,
-            "HmacSHA256"
-        );
+                keyBytes,
+                "HmacSHA256");
     }
 
     @Bean
     JwtEncoder jwtEncoder(SecretKey secretKey) {
         return NimbusJwtEncoder
-            .withSecretKey(secretKey)
-            .algorithm(MacAlgorithm.HS256)
-            .build();
+                .withSecretKey(secretKey)
+                .algorithm(MacAlgorithm.HS256)
+                .build();
     }
 
     @Bean
     JwtDecoder jwtDecoder(
             SecretKey secretKey,
-            JwtProperties properties
-    ) {
+            JwtProperties properties,
+            JwtAccountStateValidator accountStateValidator) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder
-            .withSecretKey(secretKey)
-            .macAlgorithm(MacAlgorithm.HS256)
-            .build();
+                .withSecretKey(secretKey)
+                .macAlgorithm(MacAlgorithm.HS256)
+                .build();
 
-        /*
-         * Valida fechas estándar y el claim issuer.
-         */
-        decoder.setJwtValidator(
-            JwtValidators.createDefaultWithIssuer(
-                properties.issuer()
-            )
-        );
+        OAuth2TokenValidator<Jwt> standardValidators = JwtValidators.createDefaultWithIssuer(
+                properties.issuer());
+
+        OAuth2TokenValidator<Jwt> validators = new DelegatingOAuth2TokenValidator<>(
+                standardValidators,
+                accountStateValidator);
+
+        decoder.setJwtValidator(validators);
 
         return decoder;
     }

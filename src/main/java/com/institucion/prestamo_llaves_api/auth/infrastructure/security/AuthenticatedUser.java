@@ -1,6 +1,5 @@
 package com.institucion.prestamo_llaves_api.auth.infrastructure.security;
 
-
 import java.util.Collection;
 import java.util.List;
 
@@ -15,30 +14,51 @@ import com.institucion.prestamo_llaves_api.user.domain.model.UserRole;
  * Representación del usuario utilizada por Spring Security.
  */
 public record AuthenticatedUser(
-    Long id,
-    String fullName,
-    String email,
-    String passwordHash,
-    UserRole role,
-    boolean enabled,
-    boolean mustChangePassword
-) implements UserDetails {
+        Long id,
+        String fullName,
+        String email,
+        String passwordHash,
+        UserRole role,
+        boolean enabled,
+        boolean mustChangePassword,
+        long tokenVersion) implements UserDetails {
 
     public static AuthenticatedUser from(User user) {
         return new AuthenticatedUser(
-            user.getId(),
-            user.getFullName(),
-            user.getEmail(),
-            user.getPasswordHash(),
-            user.getRole(),
-            user.isEnabled(),
-            user.isMustChangePassword()
-        );
+                user.getId(),
+                user.getFullName(),
+                user.getEmail(),
+                user.getPasswordHash(),
+                user.getRole(),
+                user.isEnabled(),
+                user.isMustChangePassword(),
+                user.getTokenVersion());
+    }
+
+    /**
+     * Constructor auxiliar para pruebas y código anterior.
+     */
+    public AuthenticatedUser(
+            Long id,
+            String fullName,
+            String email,
+            String passwordHash,
+            UserRole role,
+            boolean enabled,
+            boolean mustChangePassword) {
+        this(
+                id,
+                fullName,
+                email,
+                passwordHash,
+                role,
+                enabled,
+                mustChangePassword,
+                0L);
     }
 
     @Override
-    public Collection<? extends GrantedAuthority>
-            getAuthorities() {
+    public Collection<? extends GrantedAuthority> getAuthorities() {
 
         /*
          * Un usuario con contraseña temporal no recibe todavía
@@ -46,17 +66,13 @@ public record AuthenticatedUser(
          */
         if (mustChangePassword) {
             return List.of(
-                new SimpleGrantedAuthority(
-                    "ROLE_PASSWORD_CHANGE_REQUIRED"
-                )
-            );
+                    new SimpleGrantedAuthority(
+                            "ROLE_PASSWORD_CHANGE_REQUIRED"));
         }
 
         return List.of(
-            new SimpleGrantedAuthority(
-                "ROLE_" + role.name()
-            )
-        );
+                new SimpleGrantedAuthority(
+                        "ROLE_" + role.name()));
     }
 
     @Override
@@ -88,4 +104,5 @@ public record AuthenticatedUser(
     public boolean isEnabled() {
         return enabled;
     }
+
 }

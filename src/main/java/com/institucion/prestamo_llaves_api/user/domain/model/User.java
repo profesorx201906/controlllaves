@@ -1,6 +1,5 @@
 package com.institucion.prestamo_llaves_api.user.domain.model;
 
-
 import java.util.Locale;
 import java.util.Objects;
 
@@ -26,56 +25,34 @@ public class User extends AuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(
-        name = "id",
-        nullable = false,
-        updatable = false
-    )
+    @Column(name = "id", nullable = false, updatable = false)
     private Long id;
 
-    @Column(
-        name = "full_name",
-        nullable = false,
-        length = 120
-    )
+    @Column(name = "full_name", nullable = false, length = 120)
     private String fullName;
 
-    @Column(
-        name = "email",
-        nullable = false,
-        length = 180
-    )
+    @Column(name = "email", nullable = false, length = 180)
     private String email;
 
     /**
      * Contendrá una contraseña cifrada, nunca texto plano.
      */
-    @Column(
-        name = "password_hash",
-        nullable = false,
-        length = 255
-    )
+    @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
     @Enumerated(EnumType.STRING)
-    @Column(
-        name = "role",
-        nullable = false,
-        length = 20
-    )
+    @Column(name = "role", nullable = false, length = 20)
     private UserRole role;
 
-    @Column(
-        name = "enabled",
-        nullable = false
-    )
+    @Column(name = "enabled", nullable = false)
     private boolean enabled;
 
-    @Column(
-        name = "must_change_password",
-        nullable = false
-    )
+    @Column(name = "must_change_password", nullable = false)
+
     private boolean mustChangePassword;
+
+    @Column(name = "token_version", nullable = false)
+    private long tokenVersion;
 
     /**
      * Constructor requerido por JPA.
@@ -96,8 +73,7 @@ public class User extends AuditableEntity {
             String fullName,
             String email,
             String passwordHash,
-            UserRole role
-    ) {
+            UserRole role) {
         this.fullName = requireText(fullName, "fullName");
         this.email = normalizeEmail(email);
         this.passwordHash = requireText(passwordHash, "passwordHash");
@@ -105,6 +81,7 @@ public class User extends AuditableEntity {
 
         this.enabled = true;
         this.mustChangePassword = true;
+        this.tokenVersion = 0L;
     }
 
     /**
@@ -112,8 +89,7 @@ public class User extends AuditableEntity {
      */
     public void updateProfile(
             String fullName,
-            String email
-    ) {
+            String email) {
         this.fullName = requireText(fullName, "fullName");
         this.email = normalizeEmail(email);
     }
@@ -125,10 +101,8 @@ public class User extends AuditableEntity {
      */
     public void changePasswordHash(
             String newPasswordHash,
-            boolean requireChangeOnNextLogin
-    ) {
-        this.passwordHash =
-            requireText(newPasswordHash, "newPasswordHash");
+            boolean requireChangeOnNextLogin) {
+        this.passwordHash = requireText(newPasswordHash, "newPasswordHash");
 
         this.mustChangePassword = requireChangeOnNextLogin;
     }
@@ -142,9 +116,8 @@ public class User extends AuditableEntity {
 
     public void changeRole(UserRole newRole) {
         this.role = Objects.requireNonNull(
-            newRole,
-            "newRole es obligatorio"
-        );
+                newRole,
+                "newRole es obligatorio");
     }
 
     public void activate() {
@@ -161,17 +134,15 @@ public class User extends AuditableEntity {
      */
     private static String normalizeEmail(String email) {
         return requireText(email, "email")
-            .toLowerCase(Locale.ROOT);
+                .toLowerCase(Locale.ROOT);
     }
 
     private static String requireText(
             String value,
-            String fieldName
-    ) {
+            String fieldName) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(
-                fieldName + " es obligatorio"
-            );
+                    fieldName + " es obligatorio");
         }
 
         return value.trim();
@@ -203,5 +174,25 @@ public class User extends AuditableEntity {
 
     public boolean isMustChangePassword() {
         return mustChangePassword;
+    }
+
+    /**
+     * Incrementa la versión de seguridad.
+     *
+     * Todos los JWT emitidos con una versión anterior
+     * dejarán de ser válidos.
+     */
+    public void incrementTokenVersion() {
+        if (tokenVersion == Long.MAX_VALUE) {
+            throw new IllegalStateException(
+                    "La versión de seguridad del usuario "
+                            + "alcanzó el valor máximo");
+        }
+
+        tokenVersion++;
+    }
+
+    public long getTokenVersion() {
+        return tokenVersion;
     }
 }

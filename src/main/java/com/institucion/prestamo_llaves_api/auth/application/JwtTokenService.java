@@ -1,6 +1,5 @@
 package com.institucion.prestamo_llaves_api.auth.application;
 
-
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -28,79 +27,65 @@ public class JwtTokenService {
     public JwtTokenService(
             JwtEncoder jwtEncoder,
             JwtProperties properties,
-            Clock clock
-    ) {
+            Clock clock) {
         this.jwtEncoder = jwtEncoder;
         this.properties = properties;
         this.clock = clock;
     }
 
     public IssuedToken issueToken(
-            AuthenticatedUser user
-    ) {
+            AuthenticatedUser user) {
         validateTokenTtl();
 
         Instant issuedAt = clock.instant();
-        Instant expiresAt =
-            issuedAt.plus(properties.accessTokenTtl());
+        Instant expiresAt = issuedAt.plus(properties.accessTokenTtl());
 
-        List<String> authorities =
-            determineAuthorities(user);
+        List<String> authorities = determineAuthorities(user);
 
         JwsHeader headers = JwsHeader
-            .with(MacAlgorithm.HS256)
-            .type("JWT")
-            .build();
+                .with(MacAlgorithm.HS256)
+                .type("JWT")
+                .build();
 
         JwtClaimsSet claims = JwtClaimsSet
-            .builder()
-            .issuer(properties.issuer())
-            .issuedAt(issuedAt)
-            .expiresAt(expiresAt)
-
-            /*
-             * El subject contiene el identificador estable
-             * del usuario, no el correo modificable.
-             */
-            .subject(user.id().toString())
-
-            .claim("email", user.email())
-            .claim("name", user.fullName())
-            .claim("role", user.role().name())
-            .claim("authorities", authorities)
-            .claim(
-                "must_change_password",
-                user.mustChangePassword()
-            )
-            .build();
+                .builder()
+                .issuer(properties.issuer())
+                .issuedAt(issuedAt)
+                .expiresAt(expiresAt)
+                .subject(user.id().toString())
+                .claim("email", user.email())
+                .claim("name", user.fullName())
+                .claim("role", user.role().name())
+                .claim("authorities", authorities)
+                .claim(
+                        "must_change_password",
+                        user.mustChangePassword())
+                .claim(
+                        "token_version",
+                        user.tokenVersion())
+                .build();
 
         String token = jwtEncoder
-            .encode(
-                JwtEncoderParameters.from(
-                    headers,
-                    claims
-                )
-            )
-            .getTokenValue();
+                .encode(
+                        JwtEncoderParameters.from(
+                                headers,
+                                claims))
+                .getTokenValue();
 
         return new IssuedToken(
-            token,
-            expiresAt
-        );
+                token,
+                expiresAt);
     }
 
     private static List<String> determineAuthorities(
-            AuthenticatedUser user
-    ) {
+            AuthenticatedUser user) {
         if (user.mustChangePassword()) {
             return List.of(
-                "PASSWORD_CHANGE_REQUIRED"
-            );
+                    "PASSWORD_CHANGE_REQUIRED");
         }
 
         return List.of(
-            user.role().name()
-        );
+                user.role().name());
     }
 
     private void validateTokenTtl() {
@@ -108,8 +93,7 @@ public class JwtTokenService {
                 || properties.accessTokenTtl().isNegative()) {
 
             throw new IllegalStateException(
-                "JWT_ACCESS_TOKEN_TTL debe ser positivo"
-            );
+                    "JWT_ACCESS_TOKEN_TTL debe ser positivo");
         }
     }
 }
