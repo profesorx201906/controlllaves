@@ -1,11 +1,12 @@
 package com.institucion.prestamo_llaves_api.incident.application;
 
-
 import java.time.Clock;
 import java.time.Instant;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import com.institucion.prestamo_llaves_api.incident.domain.model.Incident;
 import com.institucion.prestamo_llaves_api.incident.domain.model.IncidentType;
@@ -34,8 +35,7 @@ public class IncidentApplicationService {
             LoanRepository loanRepository,
             RoomKeyRepository roomKeyRepository,
             IncidentRepository incidentRepository,
-            Clock clock
-    ) {
+            Clock clock) {
         this.loanRepository = loanRepository;
         this.roomKeyRepository = roomKeyRepository;
         this.incidentRepository = incidentRepository;
@@ -48,21 +48,19 @@ public class IncidentApplicationService {
      * El usuario solamente puede reportar incidencias asociadas
      * a sus propios préstamos.
      */
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'USUARIO')")
     @Transactional
     public IncidentCreatedResult reportIncident(
             Long loanId,
             Long userId,
             IncidentType incidentType,
-            String description
-    ) {
+            String description) {
         validateIdentifier(loanId, "loanId");
         validateIdentifier(userId, "userId");
 
-        IncidentType validatedType =
-            validateIncidentType(incidentType);
+        IncidentType validatedType = validateIncidentType(incidentType);
 
-        String normalizedDescription =
-            validateDescription(description);
+        String normalizedDescription = validateDescription(description);
 
         /*
          * Primera consulta: obtenemos únicamente la llave
@@ -71,13 +69,10 @@ public class IncidentApplicationService {
          * Todavía no asumimos que el préstamo siga activo.
          */
         Long roomKeyId = loanRepository
-            .findRoomKeyIdByLoanId(loanId)
-            .orElseThrow(() ->
-                new ResourceNotFoundException(
-                    "Préstamo",
-                    loanId
-                )
-            );
+                .findRoomKeyIdByLoanId(loanId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Préstamo",
+                        loanId));
 
         /*
          * Utilizamos el mismo bloqueo que emplea la devolución.
@@ -86,13 +81,10 @@ public class IncidentApplicationService {
          * no pueden completar sus modificaciones simultáneamente.
          */
         RoomKey roomKey = roomKeyRepository
-            .findByIdForUpdate(roomKeyId)
-            .orElseThrow(() ->
-                new ResourceNotFoundException(
-                    "Llave",
-                    roomKeyId
-                )
-            );
+                .findByIdForUpdate(roomKeyId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Llave",
+                        roomKeyId));
 
         /*
          * La validación del préstamo activo se realiza después
@@ -102,13 +94,10 @@ public class IncidentApplicationService {
          * esta consulta ya no encontrará un préstamo activo.
          */
         Loan activeLoan = loanRepository
-            .findActiveById(loanId)
-            .orElseThrow(() ->
-                new BusinessRuleException(
-                    "LOAN_NOT_ACTIVE",
-                    "El préstamo ya no se encuentra activo"
-                )
-            );
+                .findActiveById(loanId)
+                .orElseThrow(() -> new BusinessRuleException(
+                        "LOAN_NOT_ACTIVE",
+                        "El préstamo ya no se encuentra activo"));
 
         /*
          * Un préstamo activo requiere que la llave figure
@@ -116,10 +105,9 @@ public class IncidentApplicationService {
          */
         if (!roomKey.isLoaned()) {
             throw new BusinessRuleException(
-                "KEY_STATE_INCONSISTENT",
-                "El préstamo está activo, pero la llave figura "
-                    + "como disponible"
-            );
+                    "KEY_STATE_INCONSISTENT",
+                    "El préstamo está activo, pero la llave figura "
+                            + "como disponible");
         }
 
         /*
@@ -127,20 +115,18 @@ public class IncidentApplicationService {
          */
         if (!activeLoan.belongsToUser(userId)) {
             throw new BusinessRuleException(
-                "LOAN_NOT_OWNED_BY_USER",
-                "El préstamo pertenece a otro usuario"
-            );
+                    "LOAN_NOT_OWNED_BY_USER",
+                    "El préstamo pertenece a otro usuario");
         }
 
         Instant reportedAt = clock.instant();
 
         Incident incident = new Incident(
-            activeLoan,
-            activeLoan.getUser(),
-            validatedType,
-            normalizedDescription,
-            reportedAt
-        );
+                activeLoan,
+                activeLoan.getUser(),
+                validatedType,
+                normalizedDescription,
+                reportedAt);
 
         /*
          * La incidencia se registra con:
@@ -148,55 +134,47 @@ public class IncidentApplicationService {
          * notification_status = PENDIENTE
          * notification_attempts = 0
          */
-        Incident savedIncident =
-            incidentRepository.saveAndFlush(incident);
+        Incident savedIncident = incidentRepository.saveAndFlush(incident);
 
         return new IncidentCreatedResult(
-            savedIncident.getId(),
-            activeLoan.getId(),
-            roomKey.getId(),
-            activeLoan.getUser().getId(),
-            savedIncident.getIncidentType(),
-            savedIncident.getDescription(),
-            savedIncident.getReportedAt(),
-            savedIncident.getNotificationStatus()
-        );
+                savedIncident.getId(),
+                activeLoan.getId(),
+                roomKey.getId(),
+                activeLoan.getUser().getId(),
+                savedIncident.getIncidentType(),
+                savedIncident.getDescription(),
+                savedIncident.getReportedAt(),
+                savedIncident.getNotificationStatus());
     }
 
     private static IncidentType validateIncidentType(
-            IncidentType incidentType
-    ) {
+            IncidentType incidentType) {
         if (incidentType == null) {
             throw new BusinessRuleException(
-                "INCIDENT_TYPE_REQUIRED",
-                "El tipo de incidencia es obligatorio"
-            );
+                    "INCIDENT_TYPE_REQUIRED",
+                    "El tipo de incidencia es obligatorio");
         }
 
         return incidentType;
     }
 
     private static String validateDescription(
-            String description
-    ) {
+            String description) {
         if (description == null || description.isBlank()) {
             throw new BusinessRuleException(
-                "INCIDENT_DESCRIPTION_REQUIRED",
-                "La descripción de la incidencia es obligatoria"
-            );
+                    "INCIDENT_DESCRIPTION_REQUIRED",
+                    "La descripción de la incidencia es obligatoria");
         }
 
         String normalizedDescription = description.trim();
 
-        if (normalizedDescription.length()
-                > MAX_DESCRIPTION_LENGTH) {
+        if (normalizedDescription.length() > MAX_DESCRIPTION_LENGTH) {
 
             throw new BusinessRuleException(
-                "INCIDENT_DESCRIPTION_TOO_LONG",
-                "La descripción no puede superar "
-                    + MAX_DESCRIPTION_LENGTH
-                    + " caracteres"
-            );
+                    "INCIDENT_DESCRIPTION_TOO_LONG",
+                    "La descripción no puede superar "
+                            + MAX_DESCRIPTION_LENGTH
+                            + " caracteres");
         }
 
         return normalizedDescription;
@@ -204,14 +182,12 @@ public class IncidentApplicationService {
 
     private static void validateIdentifier(
             Long identifier,
-            String fieldName
-    ) {
+            String fieldName) {
         if (identifier == null || identifier <= 0) {
             throw new BusinessRuleException(
-                "INVALID_IDENTIFIER",
-                fieldName
-                    + " debe ser un identificador positivo"
-            );
+                    "INVALID_IDENTIFIER",
+                    fieldName
+                            + " debe ser un identificador positivo");
         }
     }
 }
