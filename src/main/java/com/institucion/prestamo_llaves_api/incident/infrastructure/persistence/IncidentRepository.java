@@ -188,4 +188,19 @@ public interface IncidentRepository
             """)
     List<Long> findOpenIncidentLoanIds(
             @Param("loanIds") Collection<Long> loanIds);
+
+    /**
+     * Cuenta todas las incidencias abiertas del sistema.
+     *
+     * Una incidencia se considera abierta mientras
+     * resolvedAt permanezca en null.
+     */
+    long countByResolvedAtIsNull();
+
+    /**
+     * Cuenta las incidencias abiertas reportadas
+     * por un usuario específico.
+     */
+    long countByReportedByUser_IdAndResolvedAtIsNull(
+            Long userId);
 }

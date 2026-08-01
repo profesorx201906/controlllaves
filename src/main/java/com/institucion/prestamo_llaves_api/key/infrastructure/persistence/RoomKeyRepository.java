@@ -120,4 +120,13 @@ public interface RoomKeyRepository
             @Param("status") KeyStatus status,
             Pageable pageable);
 
+    /**
+     * Cuenta las llaves de ambientes activos según su estado.
+     *
+     * Se utiliza para obtener las métricas de llaves
+     * disponibles y prestadas del dashboard.
+     */
+    long countByStatusAndRoom_ActiveTrue(
+            KeyStatus status);
+
 }

@@ -1,6 +1,5 @@
 package com.institucion.prestamo_llaves_api.room.infrastructure.persistence;
 
-
 import java.util.List;
 import java.util.Optional;
 
@@ -29,4 +28,12 @@ public interface RoomRepository
      * ordenados alfabéticamente.
      */
     List<Room> findAllByActiveTrueOrderByNameAsc();
+
+    /**
+     * Cuenta los ambientes activos del sistema.
+     *
+     * Se utiliza para la métrica administrativa
+     * del dashboard.
+     */
+    long countByActiveTrue();
 }
